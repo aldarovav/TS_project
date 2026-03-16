@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import warnings
 import sys
+import torch
 warnings.filterwarnings('ignore')
 
 # Импорты из наших модулей
@@ -105,32 +106,40 @@ def main(args):
         scalers_list = [item['scaler'] for item in series_data]
         test_values_list = [item['test'].values for item in series_data]
 
-        for model_name in GLOBAL_MODELS:
-            print(f"  Global: {model_name}")
-            try:
-                if model_name == 'catboost':
-                    preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
-                elif model_name == 'nbeats':
-                    preds_scaled = train_nbeats(train_series_scaled, h=horizon,
-                                                epochs=epochs, device=device)
-                else:
-                    continue
+for model_name in GLOBAL_MODELS:
+    print(f"  Global: {model_name}")
+    try:
+        if model_name == 'catboost':
+            preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
+        elif model_name == 'nbeats':
+            preds_scaled = train_nbeats(train_series_scaled, h=horizon,
+                                        epochs=epochs, device=device)
+        else:
+            continue
 
-                smapes_list = []
-                for i, pred_scaled in enumerate(preds_scaled):
-                    pred = inverse_scale(pred_scaled, scalers_list[i])
-                    test = test_values_list[i]
-                    if len(pred) == len(test):
-                        smapes_list.append(smape(test, pred))
+        smapes_list = []
+        for i, pred_scaled in enumerate(preds_scaled):
+            pred = inverse_scale(pred_scaled, scalers_list[i])
+            test = test_values_list[i]
+            if len(pred) == len(test):
+                smapes_list.append(smape(test, pred))
 
-                if smapes_list:
-                    results[model_name][scaler_name] = np.mean(smapes_list)
-                else:
-                    results[model_name][scaler_name] = np.nan
-            except Exception as e:
-                print(f"Ошибка в {model_name} со скейлером {scaler_name}: {e}")
-                results[model_name][scaler_name] = np.nan
+        if smapes_list:
+            results[model_name][scaler_name] = np.mean(smapes_list)
+        else:
+            results[model_name][scaler_name] = np.nan
 
+        # Очищаем кэш GPU после завершения работы с текущей моделью
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    except Exception as e:
+        print(f"Ошибка в {model_name} со скейлером {scaler_name}: {e}")
+        results[model_name][scaler_name] = np.nan
+        # Очищаем кэш даже в случае ошибки (на всякий случай)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            
     # Сохранение результатов с уникальным именем
     os.makedirs(RESULTS_PATH, exist_ok=True)
     results_df = pd.DataFrame(results).T

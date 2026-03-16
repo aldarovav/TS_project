@@ -95,4 +95,9 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
     model.fit(darts_series, verbose=False)
     print("✅ N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
-    return [pred.values().flatten() for pred in preds]
+    result = [pred.values().flatten() for pred in preds]
+    # Удаляем модель и очищаем кэш
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return result

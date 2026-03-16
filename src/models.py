@@ -51,16 +51,21 @@ def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     return forecast['AutoETS'].values
 
 # ---------- Глобальные модели ----------
-def train_catboost(series_list, h=HORIZON):
+def train_catboost(series_list, h=HORIZON, device='cpu'):
+    print(f"🚀 Starting CatBoost training on {device.upper()}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
+    # Определяем task_type в зависимости от device
+    task_type = "GPU" if device == 'gpu' else "CPU"
     model = CatBoostModel(
         lags=24,
         output_chunk_length=h,
         random_state=RANDOM_STATE,
-        verbose=False
+        verbose=False,
+        task_type=task_type  # 👈 добавляем эту строку
     )
     model.fit(darts_series)
     preds = model.predict(n=h, series=darts_series)
+    print("CatBoost training completed.")
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):

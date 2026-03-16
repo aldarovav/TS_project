@@ -61,7 +61,7 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
     model = NBEATSModel(
         input_chunk_length=36,
         output_chunk_length=h,
-        batch_size=16,
+        batch_size=128,
         n_epochs=epochs,
         random_state=RANDOM_STATE,
         pl_trainer_kwargs={"accelerator": accelerator, "devices": 1}

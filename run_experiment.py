@@ -134,12 +134,14 @@ for model_name in GLOBAL_MODELS:
             torch.cuda.empty_cache()
 
     except Exception as e:
-        print(f"Ошибка в {model_name} со скейлером {scaler_name}: {e}")
+        print(f"❌ Ошибка в {model_name} со скейлером {scaler_name}:")
+        import traceback
+        traceback.print_exc()  # печатает полный стек ошибки
         results[model_name][scaler_name] = np.nan
-        # Очищаем кэш даже в случае ошибки (на всякий случай)
+        # Также очищаем память GPU на всякий случай
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            
+
     # Сохранение результатов с уникальным именем
     os.makedirs(RESULTS_PATH, exist_ok=True)
     results_df = pd.DataFrame(results).T

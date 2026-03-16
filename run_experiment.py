@@ -109,7 +109,7 @@ def main(args):
             print(f"  Global: {model_name}")
             try:
                 if model_name == 'catboost':
-                    preds_scaled = train_catboost(train_series_scaled, h=horizon)
+                    preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
                 elif model_name == 'nbeats':
                     preds_scaled = train_nbeats(train_series_scaled, h=horizon,
                                                 epochs=epochs, device=device)

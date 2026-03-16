@@ -30,17 +30,22 @@ def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
 
 def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     """
-    AutoETS с принудительной аддитивной сезонностью.
+    Быстрая ETS из statsforecast для одного ряда.
     """
-    forecaster = AutoETS(
-        sp=season_length,
-        auto=True,
-        seasonal='add',          # явно указываем аддитивную сезонность
-        random_state=RANDOM_STATE
+    # y_train - pandas Series с числовым индексом (как у нас)
+    df = pd.DataFrame({
+        'ds': y_train.index.values,
+        'y': y_train.values,
+        'unique_id': 'ts'
+    })
+    sf = StatsForecast(
+        models=[StatsAutoETS(season_length=season_length)],
+        freq=1,  # для числового индекса частота 1
+        n_jobs=1
     )
-    forecaster.fit(y_train)
-    y_pred = forecaster.predict(fh=np.arange(1, h+1))
-    return y_pred.values
+    sf.fit(df)
+    forecast = sf.predict(h=h)
+    return forecast['AutoETS'].values
 
 # ---------- Глобальные модели ----------
 def train_catboost(series_list, h=HORIZON, device='cpu'):

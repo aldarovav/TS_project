@@ -32,18 +32,18 @@ def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
 
 def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     """
-    Быстрая ETS из statsforecast для одного ряда.
+    AutoETS из statsforecast (быстрая реализация) для одного ряда.
     """
-    # y_train - pandas Series с числовым индексом (как у нас)
+    # Преобразуем в DataFrame с колонками ds, y, unique_id
     df = pd.DataFrame({
-        'ds': y_train.index.values,
+        'ds': y_train.index.values,   # числовой индекс (RangeIndex)
         'y': y_train.values,
-        'unique_id': 'ts'
+        'unique_id': 'ts'              # один ряд
     })
     sf = StatsForecast(
         models=[StatsAutoETS(season_length=season_length)],
-        freq=1,  # для числового индекса частота 1
-        n_jobs=1
+        freq=1,                         # частота 1 для числового индекса
+        n_jobs=8                         # один поток (можно увеличить при обработке многих рядов сразу)
     )
     sf.fit(df)
     forecast = sf.predict(h=h)

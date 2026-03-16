@@ -6,8 +6,6 @@ from sktime.transformations.series.detrend import Deseasonalizer
 from darts import TimeSeries
 from darts.models import CatBoostModel, NBEATSModel
 from config import SEASON_LENGTH, HORIZON, RANDOM_STATE
-from statsforecast import StatsForecast
-from statsforecast.models import AutoETS as StatsAutoETS
 
 # ---------- Локальные модели (бейзлайны) ----------
 def naive_forecast(y_train, h):
@@ -32,26 +30,24 @@ def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
 
 def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     """
-    Быстрая ETS из statsforecast.
+    AutoETS с принудительной аддитивной сезонностью.
     """
-    # y_train - pandas Series с индексом (даты или целые числа)
-    # Преобразуем в формат, понятный StatsForecast
-    df = pd.DataFrame({
-        'ds': y_train.index,  # можно использовать числовой индекс
-        'y': y_train.values,
-        'unique_id': 'ts'
-    })
-    sf = StatsForecast(
-        models=[StatsAutoETS(season_length=season_length)],
-        freq=1,  # частота не важна для числового индекса
-        n_jobs=-1  # использовать все ядра
+    forecaster = AutoETS(
+        sp=season_length,
+        auto=True,
+        seasonal='add',          # явно указываем аддитивную сезонность
+        random_state=RANDOM_STATE
     )
-    sf.fit(df)
-    forecast = sf.predict(h=h)
-    return forecast['AutoETS'].values
+    forecaster.fit(y_train)
+    y_pred = forecaster.predict(fh=np.arange(1, h+1))
+    return y_pred.values
 
 # ---------- Глобальные модели ----------
 def train_catboost(series_list, h=HORIZON, device='cpu'):
+    """
+    Обучает CatBoostModel.
+    Если device='gpu', пытается использовать GPU (требуется установка catboost с поддержкой GPU).
+    """
     print(f"🚀 Starting CatBoost training on {device.upper()}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
     # Определяем task_type в зависимости от device
@@ -61,14 +57,17 @@ def train_catboost(series_list, h=HORIZON, device='cpu'):
         output_chunk_length=h,
         random_state=RANDOM_STATE,
         verbose=False,
-        task_type=task_type  # 👈 добавляем эту строку
+        task_type=task_type  # включает GPU, если доступно
     )
     model.fit(darts_series)
     preds = model.predict(n=h, series=darts_series)
-    print("CatBoost training completed.")
+    print(" CatBoost training completed.")
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
+    """
+    Обучает NBEATSModel с использованием GPU/CPU.
+    """
     print(f"🚀 Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
     accelerator = 'gpu' if device == 'gpu' else 'cpu'
@@ -80,13 +79,13 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         random_state=RANDOM_STATE,
         pl_trainer_kwargs={
             "accelerator": accelerator,
-            "devices": 1,
-            "enable_progress_bar": True,
-            "log_every_n_steps": 1000   # теперь прогресс будет каждые 10 батчей
+            "devices": 2,                     # используем один GPU (можно попробовать 2)
+            "enable_progress_bar": False,
+            "log_every_n_steps": 1000,         # выводить прогресс каждые 500 шагов
+            "enable_model_summary": False      # убираем длинную таблицу параметров
         }
-        # verbose убран из конструктора!
     )
-    model.fit(darts_series, verbose=True)   # здесь verbose можно оставить
-    print("N-BEATS training completed.")
+    model.fit(darts_series, verbose=True)     # прогресс по эпохам
+    print(" N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
     return [pred.values().flatten() for pred in preds]

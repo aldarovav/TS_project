@@ -69,7 +69,7 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
             "accelerator": accelerator,
             "devices": 1,
             "enable_progress_bar": True,
-              # теперь прогресс будет каждые 10 батчей
+            "log_every_n_steps": 1000   # теперь прогресс будет каждые 10 батчей
         }
         # verbose убран из конструктора!
     )

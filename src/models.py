@@ -72,11 +72,11 @@ def train_catboost(series_list, h=HORIZON, device='cpu'):
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
-    """
-    Обучает NBEATSModel с использованием GPU/CPU.
-    """
     print(f"🚀 Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
-    darts_series = [TimeSeries.from_series(s) for s in series_list]
+    darts_series = []
+    for s in series_list:
+        s = s.reset_index(drop=True)   # 👈 обязательно
+        darts_series.append(TimeSeries.from_series(s))
     accelerator = 'gpu' if device == 'gpu' else 'cpu'
     model = NBEATSModel(
         input_chunk_length=36,
@@ -86,13 +86,12 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         random_state=RANDOM_STATE,
         pl_trainer_kwargs={
             "accelerator": accelerator,
-            "devices": 2,                     # используем один GPU (можно попробовать 2)
-            "enable_progress_bar": False,
-            "log_every_n_steps": 1000,         # выводить прогресс каждые 500 шагов
-            "enable_model_summary": False      # убираем длинную таблицу параметров
+            "devices": 2,
+            "enable_progress_bar": False,       # отключаем детальный прогресс
+            "enable_model_summary": False
         }
     )
-    model.fit(darts_series, verbose=True)     # прогресс по эпохам
-    print(" N-BEATS training completed.")
+    model.fit(darts_series, verbose=False)
+    print("✅ N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
     return [pred.values().flatten() for pred in preds]

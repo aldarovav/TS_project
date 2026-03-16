@@ -6,6 +6,8 @@ from sktime.transformations.series.detrend import Deseasonalizer
 from darts import TimeSeries
 from darts.models import CatBoostModel, NBEATSModel
 from config import SEASON_LENGTH, HORIZON, RANDOM_STATE
+from statsforecast import StatsForecast
+from statsforecast.models import AutoETS as StatsAutoETS
 
 # ---------- Локальные модели (бейзлайны) ----------
 def naive_forecast(y_train, h):

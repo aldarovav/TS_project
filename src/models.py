@@ -34,16 +34,15 @@ def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     """
     AutoETS из statsforecast (быстрая реализация) для одного ряда.
     """
-    # Преобразуем в DataFrame с колонками ds, y, unique_id
     df = pd.DataFrame({
         'ds': y_train.index.values,   # числовой индекс (RangeIndex)
         'y': y_train.values,
-        'unique_id': 'ts'              # один ряд
+        'unique_id': 'ts'
     })
     sf = StatsForecast(
         models=[StatsAutoETS(season_length=season_length)],
-        freq=1,                         # частота 1 для числового индекса
-        n_jobs=8                         # один поток (можно увеличить при обработке многих рядов сразу)
+        freq=1,
+        n_jobs=1   # один поток, так как обрабатываем один ряд
     )
     sf.fit(df)
     forecast = sf.predict(h=h)
@@ -53,29 +52,31 @@ def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
 def train_catboost(series_list, h=HORIZON, device='cpu'):
     """
     Обучает CatBoostModel.
-    Если device='gpu', пытается использовать GPU (требуется установка catboost с поддержкой GPU).
+    Если device='gpu', пытается использовать GPU.
     """
     print(f"🚀 Starting CatBoost training on {device.upper()}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
-    # Определяем task_type в зависимости от device
     task_type = "GPU" if device == 'gpu' else "CPU"
     model = CatBoostModel(
         lags=24,
         output_chunk_length=h,
         random_state=RANDOM_STATE,
         verbose=False,
-        task_type=task_type  # включает GPU, если доступно
+        task_type=task_type
     )
     model.fit(darts_series)
     preds = model.predict(n=h, series=darts_series)
-    print(" CatBoost training completed.")
+    print("✅ CatBoost training completed.")
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
+    """
+    Обучает NBEATSModel с использованием GPU/CPU.
+    """
     print(f"🚀 Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
     darts_series = []
     for s in series_list:
-        s = s.reset_index(drop=True)   # 👈 обязательно
+        s = s.reset_index(drop=True)   # гарантируем RangeIndex
         darts_series.append(TimeSeries.from_series(s))
     accelerator = 'gpu' if device == 'gpu' else 'cpu'
     model = NBEATSModel(
@@ -87,17 +88,12 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         pl_trainer_kwargs={
             "accelerator": accelerator,
             "devices": 1,
-            "enable_progress_bar": True,       # отключаем детальный прогресс
-            "log_every_n_steps": 500,
-            "enable_model_summary": False
+            "enable_progress_bar": True,       # включаем прогресс-бар
+            "log_every_n_steps": 500,           # выводим loss каждые 500 шагов
+            "enable_model_summary": False        # убираем длинную таблицу
         }
     )
     model.fit(darts_series, verbose=False)
     print("✅ N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
-    result = [pred.values().flatten() for pred in preds]
-    # Удаляем модель и очищаем кэш
-    del model
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    return result
+    return [pred.values().flatten() for pred in preds]

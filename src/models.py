@@ -56,6 +56,7 @@ def train_catboost(series_list, h=HORIZON):
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
+    print(f"🚀 Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
     accelerator = 'gpu' if device == 'gpu' else 'cpu'
     model = NBEATSModel(
@@ -64,8 +65,15 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         batch_size=128,
         n_epochs=epochs,
         random_state=RANDOM_STATE,
-        pl_trainer_kwargs={"accelerator": accelerator, "devices": 1}
+        pl_trainer_kwargs={
+            "accelerator": accelerator,
+            "devices": 1,
+            "enable_progress_bar": True,
+            "log_every_n_steps": 10   # выводить прогресс каждые 10 батчей
+        },
+        verbose=True
     )
-    model.fit(darts_series, verbose=False)
+    model.fit(darts_series, verbose=True)
+    print("N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
     return [pred.values().flatten() for pred in preds]

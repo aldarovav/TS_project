@@ -86,7 +86,7 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         random_state=RANDOM_STATE,
         pl_trainer_kwargs={
             "accelerator": accelerator,
-            "devices": 2,
+            "devices": 1,
             "enable_progress_bar": False,       # отключаем детальный прогресс
             "enable_model_summary": False
         }

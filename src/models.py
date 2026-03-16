@@ -69,11 +69,11 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
             "accelerator": accelerator,
             "devices": 1,
             "enable_progress_bar": True,
-            "log_every_n_steps": 10   # выводить прогресс каждые 10 батчей
-        },
-        verbose=True
+            "log_every_n_steps": 10   # теперь прогресс будет каждые 10 батчей
+        }
+        # verbose убран из конструктора!
     )
-    model.fit(darts_series, verbose=True)
+    model.fit(darts_series, verbose=True)   # здесь verbose можно оставить
     print("N-BEATS training completed.")
     preds = model.predict(n=h, series=darts_series)
     return [pred.values().flatten() for pred in preds]

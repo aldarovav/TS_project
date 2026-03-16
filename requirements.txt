@@ -12,4 +12,5 @@ opencv-python==4.12.0.88
 cudf-cu12==25.10.0
 cuml-cu12==25.10.0
 tensorflow==2.19.0
-numpy==2.2.0
+numpy==2.3.0
+scipy==1.16.0

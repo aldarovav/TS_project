@@ -6,6 +6,8 @@ from sktime.transformations.series.detrend import Deseasonalizer
 from darts import TimeSeries
 from darts.models import CatBoostModel, NBEATSModel
 from config import SEASON_LENGTH, HORIZON, RANDOM_STATE
+from statsforecast import StatsForecast
+from statsforecast.models import AutoETS as StatsAutoETS
 
 # ---------- Локальные модели (бейзлайны) ----------
 def naive_forecast(y_train, h):
@@ -30,17 +32,23 @@ def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
 
 def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
     """
-    AutoETS с принудительной аддитивной сезонностью.
+    Быстрая ETS из statsforecast.
     """
-    forecaster = AutoETS(
-        sp=season_length,
-        auto=True,
-        seasonal='add',          # явно указываем аддитивную сезонность
-        random_state=RANDOM_STATE
+    # y_train - pandas Series с индексом (даты или целые числа)
+    # Преобразуем в формат, понятный StatsForecast
+    df = pd.DataFrame({
+        'ds': y_train.index,  # можно использовать числовой индекс
+        'y': y_train.values,
+        'unique_id': 'ts'
+    })
+    sf = StatsForecast(
+        models=[StatsAutoETS(season_length=season_length)],
+        freq=1,  # частота не важна для числового индекса
+        n_jobs=-1  # использовать все ядра
     )
-    forecaster.fit(y_train)
-    y_pred = forecaster.predict(fh=np.arange(1, h+1))
-    return y_pred.values
+    sf.fit(df)
+    forecast = sf.predict(h=h)
+    return forecast['AutoETS'].values
 
 # ---------- Глобальные модели ----------
 def train_catboost(series_list, h=HORIZON):

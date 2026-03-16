@@ -12,3 +12,4 @@ tqdm
 torch>=2.0.0
 pytorch-lightning>=2.0.0
 einops>=0.6.0
+statsforecast

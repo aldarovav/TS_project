@@ -8,6 +8,9 @@ import sys
 import torch
 warnings.filterwarnings('ignore')
 
+# Ограничиваем видимость одним GPU (чтобы избежать проблем с распределённым режимом)
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 # Импорты из наших модулей
 from src.data_loader import load_m4_subset
 from src.preprocessing import get_scaler, fit_scale_series, inverse_scale
@@ -72,7 +75,7 @@ def main(args):
                 'train_original': train
             })
 
-        # ----- Бейзлайны -----
+        # ----- Бейзлайны (локальные модели) -----
         for model_name in BASELINE_MODELS:
             print(f"  Baseline: {model_name}")
             smapes_list = []
@@ -101,51 +104,50 @@ def main(args):
             else:
                 results[model_name][scaler_name] = np.nan
 
-        # ----- Глобальные модели -----
+        # ----- Глобальные модели (CatBoost и N‑BEATS) -----
         train_series_scaled = [item['train_scaled'] for item in series_data]
         scalers_list = [item['scaler'] for item in series_data]
         test_values_list = [item['test'].values for item in series_data]
 
-for model_name in GLOBAL_MODELS:
-    print(f"  Global: {model_name}")
-    try:
-        if model_name == 'catboost':
-            preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
-        elif model_name == 'nbeats':
-            preds_scaled = train_nbeats(train_series_scaled, h=horizon,
-                                        epochs=epochs, device=device)
-        else:
-            continue
+        for model_name in GLOBAL_MODELS:
+            print(f"  Global: {model_name}")
+            try:
+                if model_name == 'catboost':
+                    preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
+                elif model_name == 'nbeats':
+                    preds_scaled = train_nbeats(train_series_scaled, h=horizon,
+                                                epochs=epochs, device=device)
+                else:
+                    continue
 
-        smapes_list = []
-        for i, pred_scaled in enumerate(preds_scaled):
-            pred = inverse_scale(pred_scaled, scalers_list[i])
-            test = test_values_list[i]
-            if len(pred) == len(test):
-                smapes_list.append(smape(test, pred))
+                smapes_list = []
+                for i, pred_scaled in enumerate(preds_scaled):
+                    pred = inverse_scale(pred_scaled, scalers_list[i])
+                    test = test_values_list[i]
+                    if len(pred) == len(test):
+                        smapes_list.append(smape(test, pred))
 
-        if smapes_list:
-            results[model_name][scaler_name] = np.mean(smapes_list)
-        else:
-            results[model_name][scaler_name] = np.nan
+                if smapes_list:
+                    results[model_name][scaler_name] = np.mean(smapes_list)
+                else:
+                    results[model_name][scaler_name] = np.nan
 
-        # Очищаем кэш GPU после завершения работы с текущей моделью
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+                # Очищаем кэш GPU после завершения работы с текущей моделью
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
-    except Exception as e:
-        print(f"❌ Ошибка в {model_name} со скейлером {scaler_name}:")
-        import traceback
-        traceback.print_exc()  # печатает полный стек ошибки
-        results[model_name][scaler_name] = np.nan
-        # Также очищаем память GPU на всякий случай
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+            except Exception as e:
+                print(f"❌ Ошибка в {model_name} со скейлером {scaler_name}:")
+                import traceback
+                traceback.print_exc()
+                results[model_name][scaler_name] = np.nan
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
 
-    # Сохранение результатов с уникальным именем
+    # --- Сохранение результатов после обработки всех скейлеров ---
     os.makedirs(RESULTS_PATH, exist_ok=True)
     results_df = pd.DataFrame(results).T
-    results_df = results_df[SCALERS]
+    results_df = results_df[SCALERS]  # упорядочиваем столбцы
     filename = f"smape_results_{data_group}_h{horizon}_n{n_series}_e{epochs}_{device}.csv"
     out_path = os.path.join(RESULTS_PATH, filename)
     results_df.to_csv(out_path)

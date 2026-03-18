@@ -1,10 +1,10 @@
 # config.py
 
 # Data parameters
-DATA_GROUP = 'Monthly'        # тип данных M4 (Monthly)
-HORIZON = 18                  # горизонт прогноза для месячных данных
-SEASON_LENGTH = 12            # длина сезона
-N_SERIES = 100                # количество временных рядов (можно уменьшить до 50 для скорости)
+DATA_GROUP = 'Monthly'
+HORIZON = 18
+SEASON_LENGTH = 12
+N_SERIES = 200
 RANDOM_STATE = 42
 
 # Models

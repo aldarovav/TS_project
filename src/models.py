@@ -9,21 +9,16 @@ from config import SEASON_LENGTH, HORIZON, RANDOM_STATE
 from statsforecast import StatsForecast
 from statsforecast.models import AutoETS as StatsAutoETS
 
-# ---------- Локальные модели (бейзлайны) ----------
+# Локальные модели (бейзлайны)
 def naive_forecast(y_train, h):
-    """Naive forecast: повтор последнего значения."""
     return np.full(h, y_train.iloc[-1])
 
 def seasonal_naive_forecast(y_train, h, season_length=SEASON_LENGTH):
-    """Seasonal naive: повтор последнего сезона."""
     last_season = y_train.iloc[-season_length:].values
     repeats = (h + season_length - 1) // season_length
     return np.tile(last_season, repeats)[:h]
 
 def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
-    """
-    Theta-модель с аддитивной сезонностью (чтобы избежать ошибок с отрицательными значениями).
-    """
     deseasonalizer = Deseasonalizer(model='additive', sp=season_length)
     forecaster = ThetaForecaster(deseasonalize=deseasonalizer)
     forecaster.fit(y_train)
@@ -31,30 +26,24 @@ def theta_forecast(y_train, h, season_length=SEASON_LENGTH):
     return y_pred.values
 
 def ets_forecast(y_train, h, season_length=SEASON_LENGTH):
-    """
-    AutoETS из statsforecast (быстрая реализация) для одного ряда.
-    """
     df = pd.DataFrame({
-        'ds': y_train.index.values,   # числовой индекс (RangeIndex)
+        'ds': y_train.index.values,
         'y': y_train.values,
         'unique_id': 'ts'
     })
     sf = StatsForecast(
         models=[StatsAutoETS(season_length=season_length)],
         freq=1,
-        n_jobs=1   # один поток, так как обрабатываем один ряд
+        n_jobs=1
     )
     sf.fit(df)
     forecast = sf.predict(h=h)
     return forecast['AutoETS'].values
 
-# ---------- Глобальные модели ----------
+#Глобальные модели
 def train_catboost(series_list, h=HORIZON, device='cpu'):
-    """
-    Обучает CatBoostModel.
-    Если device='gpu', пытается использовать GPU.
-    """
-    print(f"🚀 Starting CatBoost training on {device.upper()}...")
+
+    print(f"Starting CatBoost training on {device.upper()}...")
     darts_series = [TimeSeries.from_series(s) for s in series_list]
     task_type = "GPU" if device == 'gpu' else "CPU"
     model = CatBoostModel(
@@ -66,14 +55,12 @@ def train_catboost(series_list, h=HORIZON, device='cpu'):
     )
     model.fit(darts_series)
     preds = model.predict(n=h, series=darts_series)
-    print("✅ CatBoost training completed.")
+    print("CatBoost training completed")
     return [pred.values().flatten() for pred in preds]
 
 def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
-    """
-    Обучает NBEATSModel с использованием GPU/CPU.
-    """
-    print(f"🚀 Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
+
+    print(f"Starting N-BEATS training on {device.upper()} with batch_size=128, epochs={epochs}...")
     darts_series = []
     for s in series_list:
         s = s.reset_index(drop=True)   # гарантируем RangeIndex
@@ -88,12 +75,12 @@ def train_nbeats(series_list, h=HORIZON, epochs=5, device='cpu'):
         pl_trainer_kwargs={
             "accelerator": accelerator,
             "devices": 1,
-            "enable_progress_bar": True,       # включаем прогресс-бар
-            "log_every_n_steps": 500,           # выводим loss каждые 500 шагов
-            "enable_model_summary": False        # убираем длинную таблицу
+            "enable_progress_bar": True,
+            "log_every_n_steps": 500,
+            "enable_model_summary": False
         }
     )
     model.fit(darts_series, verbose=False)
-    print("✅ N-BEATS training completed.")
+    print("N-BEATS training completed")
     preds = model.predict(n=h, series=darts_series)
     return [pred.values().flatten() for pred in preds]

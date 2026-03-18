@@ -8,7 +8,7 @@ import sys
 import torch
 warnings.filterwarnings('ignore')
 
-# Ограничиваем видимость одним GPU (чтобы избежать проблем с распределённым режимом)
+# Ограничиваем видимость одним GPU чтобы избежать проблем с распределённым режимом
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 # Импорты из наших модулей
@@ -50,11 +50,10 @@ def main(args):
     uids = list(train_dict.keys())
     print(f"Используется {len(uids)} рядов после проверки длины.")
 
-    # Словарь для накопления результатов
     results = {model: {scaler: [] for scaler in SCALERS} for model in BASELINE_MODELS + GLOBAL_MODELS}
 
     for scaler_name in SCALERS:
-        print(f"\n=== Scaling: {scaler_name} ===")
+        print(f"\nScaling: {scaler_name}")
 
         series_data = []
         for uid in uids:
@@ -75,7 +74,7 @@ def main(args):
                 'train_original': train
             })
 
-        # ----- Бейзлайны (локальные модели) -----
+        #Бейзлайны (локальные модели)
         for model_name in BASELINE_MODELS:
             print(f"  Baseline: {model_name}")
             smapes_list = []
@@ -104,13 +103,13 @@ def main(args):
             else:
                 results[model_name][scaler_name] = np.nan
 
-        # ----- Глобальные модели (CatBoost и N‑BEATS) -----
+        #Глобальные модели CatBoost и N‑BEATS
         train_series_scaled = [item['train_scaled'] for item in series_data]
         scalers_list = [item['scaler'] for item in series_data]
         test_values_list = [item['test'].values for item in series_data]
 
         for model_name in GLOBAL_MODELS:
-            print(f"  Global: {model_name}")
+            print(f" Global: {model_name}")
             try:
                 if model_name == 'catboost':
                     preds_scaled = train_catboost(train_series_scaled, h=horizon, device=device)
@@ -137,17 +136,17 @@ def main(args):
                     torch.cuda.empty_cache()
 
             except Exception as e:
-                print(f"❌ Ошибка в {model_name} со скейлером {scaler_name}:")
+                print(f"Ошибка в {model_name} со скейлером {scaler_name}:")
                 import traceback
                 traceback.print_exc()
                 results[model_name][scaler_name] = np.nan
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
 
-    # --- Сохранение результатов после обработки всех скейлеров ---
+    #Сохранение результатов после обработки всех скейлеров
     os.makedirs(RESULTS_PATH, exist_ok=True)
     results_df = pd.DataFrame(results).T
-    results_df = results_df[SCALERS]  # упорядочиваем столбцы
+    results_df = results_df[SCALERS]
     filename = f"smape_results_{data_group}_h{horizon}_n{n_series}_e{epochs}_{device}.csv"
     out_path = os.path.join(RESULTS_PATH, filename)
     results_df.to_csv(out_path)
